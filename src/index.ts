@@ -162,7 +162,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
-  const prompt = formatMessages(missedMessages);
+  const prompt = formatMessages(missedMessages, chatJid);
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -398,7 +398,7 @@ async function startMessageLoop(): Promise<void> {
           );
           const messagesToSend =
             allPending.length > 0 ? allPending : groupMessages;
-          const formatted = formatMessages(messagesToSend);
+          const formatted = formatMessages(messagesToSend, chatJid);
 
           if (queue.sendMessage(chatJid, formatted)) {
             logger.debug(
@@ -514,6 +514,11 @@ async function main(): Promise<void> {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
       return channel.sendMessage(jid, text);
+    },
+    sendReaction: (jid, messageId, emoji) => {
+      const channel = findChannel(channels, jid);
+      if (!channel) throw new Error(`No channel for JID: ${jid}`);
+      return channel.sendReaction?.(jid, messageId, emoji) ?? Promise.resolve();
     },
     registeredGroups: () => registeredGroups,
     registerGroup,

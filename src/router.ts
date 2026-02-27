@@ -9,12 +9,13 @@ export function escapeXml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function formatMessages(messages: NewMessage[]): string {
+export function formatMessages(messages: NewMessage[], chatJid?: string): string {
   const lines = messages.map(
     (m) =>
-      `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`,
+      `<message id="${escapeXml(m.id)}" sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`,
   );
-  return `<messages>\n${lines.join('\n')}\n</messages>`;
+  const chatAttr = chatJid ? ` chat_jid="${escapeXml(chatJid)}"` : '';
+  return `<messages${chatAttr}>\n${lines.join('\n')}\n</messages>`;
 }
 
 export function stripInternalTags(text: string): string {
