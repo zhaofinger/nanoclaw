@@ -534,6 +534,10 @@ async function main(): Promise<void> {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
     process.exit(1);
   });
+
+  // 启动自动备份调度器
+  const { startBackupScheduler } = await import('./backup-scheduler.js');
+  startBackupScheduler();
 }
 
 // Guard: only run when executed directly, not when imported by tests

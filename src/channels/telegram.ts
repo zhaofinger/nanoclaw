@@ -254,7 +254,11 @@ export class TelegramChannel implements Channel {
     }
   }
 
-  async sendReaction(jid: string, messageId: string, emoji: string): Promise<void> {
+  async sendReaction(
+    jid: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<void> {
     if (!this.bot) {
       logger.warn('Telegram bot not initialized');
       return;
@@ -262,12 +266,17 @@ export class TelegramChannel implements Channel {
 
     try {
       const numericId = jid.replace(/^tg:/, '');
-      await this.bot.api.setMessageReaction(numericId, parseInt(messageId, 10), [
-        { type: 'emoji', emoji: emoji as any },
-      ]);
+      await this.bot.api.setMessageReaction(
+        numericId,
+        parseInt(messageId, 10),
+        [{ type: 'emoji', emoji: emoji as any }],
+      );
       logger.info({ jid, messageId, emoji }, 'Telegram reaction sent');
     } catch (err) {
-      logger.error({ jid, messageId, emoji, err }, 'Failed to send Telegram reaction');
+      logger.error(
+        { jid, messageId, emoji, err },
+        'Failed to send Telegram reaction',
+      );
     }
   }
 }

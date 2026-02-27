@@ -9,7 +9,10 @@ export function escapeXml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function formatMessages(messages: NewMessage[], chatJid?: string): string {
+export function formatMessages(
+  messages: NewMessage[],
+  chatJid?: string,
+): string {
   const lines = messages.map(
     (m) =>
       `<message id="${escapeXml(m.id)}" sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`,
