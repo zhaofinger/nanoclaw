@@ -10,7 +10,8 @@ import {
   TIMEZONE,
 } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
+import { createTask, deleteTask, findExistingTask, getTaskById, updateTask } from './db.js';
+import { GroupQueue } from './group-queue.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
@@ -32,6 +33,7 @@ export interface IpcDeps {
     availableGroups: AvailableGroup[],
     registeredJids: Set<string>,
   ) => void;
+  groupQueue?: GroupQueue;
 }
 
 let ipcWatcherRunning = false;
@@ -254,6 +256,21 @@ export async function processTaskIpc(
 
         const scheduleType = data.schedule_type as 'cron' | 'interval' | 'once';
 
+        // Check for duplicate task
+        const existingTask = findExistingTask(
+          targetFolder,
+          data.prompt,
+          scheduleType,
+          data.schedule_value,
+        );
+        if (existingTask) {
+          logger.warn(
+            { taskId: existingTask.id, sourceGroup, targetFolder },
+            'Duplicate task creation attempt blocked',
+          );
+          break;
+        }
+
         let nextRun: string | null = null;
         if (scheduleType === 'cron') {
           try {
@@ -354,7 +371,12 @@ export async function processTaskIpc(
       if (data.taskId) {
         const task = getTaskById(data.taskId);
         if (task && (isMain || task.group_folder === sourceGroup)) {
+          // Remove from database
           deleteTask(data.taskId);
+          // Also remove from queue if pending
+          if (deps.groupQueue) {
+            deps.groupQueue.cancelTask(data.taskId);
+          }
           logger.info(
             { taskId: data.taskId, sourceGroup },
             'Task cancelled via IPC',

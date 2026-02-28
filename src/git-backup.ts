@@ -63,11 +63,20 @@ export async function initGitBackup(): Promise<void> {
     execSync('git init', { cwd: GROUPS_DIR, stdio: 'ignore' });
 
     // 配置 Git
-    execSync(`git config user.name "${config.gitName}"`, { cwd: GROUPS_DIR, stdio: 'ignore' });
-    execSync(`git config user.email "${config.gitEmail}"`, { cwd: GROUPS_DIR, stdio: 'ignore' });
+    execSync(`git config user.name "${config.gitName}"`, {
+      cwd: GROUPS_DIR,
+      stdio: 'ignore',
+    });
+    execSync(`git config user.email "${config.gitEmail}"`, {
+      cwd: GROUPS_DIR,
+      stdio: 'ignore',
+    });
 
     // 添加远程仓库
-    execSync(`git remote add origin ${config.repoUrl}`, { cwd: GROUPS_DIR, stdio: 'ignore' });
+    execSync(`git remote add origin ${config.repoUrl}`, {
+      cwd: GROUPS_DIR,
+      stdio: 'ignore',
+    });
 
     // 创建 .gitignore，排除不需要备份的文件
     const gitignorePath = path.join(GROUPS_DIR, '.gitignore');
@@ -252,10 +261,17 @@ export function startGitBackupScheduler(intervalMinutes: number = 60): void {
   logger.info({ intervalMinutes }, 'Starting Git backup scheduler');
 
   // 立即执行一次
-  backupToGit().catch((err) => logger.error({ err }, 'Initial Git backup failed'));
+  backupToGit().catch((err) =>
+    logger.error({ err }, 'Initial Git backup failed'),
+  );
 
   // 定期执行
-  setInterval(() => {
-    backupToGit().catch((err) => logger.error({ err }, 'Scheduled Git backup failed'));
-  }, intervalMinutes * 60 * 1000);
+  setInterval(
+    () => {
+      backupToGit().catch((err) =>
+        logger.error({ err }, 'Scheduled Git backup failed'),
+      );
+    },
+    intervalMinutes * 60 * 1000,
+  );
 }

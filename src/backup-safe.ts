@@ -1,6 +1,11 @@
 import { put, list, del } from '@vercel/blob';
 import Database from 'better-sqlite3';
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  createHash,
+} from 'crypto';
 import { createGzip, createGunzip } from 'zlib';
 import { promisify } from 'util';
 import { STORE_DIR } from './config.js';
@@ -16,7 +21,10 @@ const BACKUP_PREFIX = 'nanoclaw-backup';
 
 function getBackupKey(): Buffer {
   const env = readEnvFile(['BACKUP_KEY']);
-  return Buffer.from(env.BACKUP_KEY?.padEnd(32, '0').slice(0, 32) || 'nanoclaw-backup-key-32-chars!');
+  return Buffer.from(
+    env.BACKUP_KEY?.padEnd(32, '0').slice(0, 32) ||
+      'nanoclaw-backup-key-32-chars!',
+  );
 }
 
 function getBlobToken(): string {
@@ -67,7 +75,10 @@ function sha256(buffer: Buffer): string {
  * 使用 SQLite 在线备份 API 创建一致性的备份
  * 不需要停止服务，不会备份到一半有新数据写入
  */
-export async function createSafeBackup(): Promise<{ buffer: Buffer; metadata: BackupMetadata }> {
+export async function createSafeBackup(): Promise<{
+  buffer: Buffer;
+  metadata: BackupMetadata;
+}> {
   const dbPath = path.join(STORE_DIR, 'messages.db');
   const backupPath = path.join(STORE_DIR, 'messages.backup.tmp');
 
@@ -93,7 +104,7 @@ export async function createSafeBackup(): Promise<{ buffer: Buffer; metadata: Ba
     const compressed = await new Promise<Buffer>((resolve, reject) => {
       const gzip = createGzip({ level: 9 });
       const chunks: Buffer[] = [];
-      gzip.on('data', chunk => chunks.push(chunk));
+      gzip.on('data', (chunk) => chunks.push(chunk));
       gzip.on('end', () => resolve(Buffer.concat(chunks)));
       gzip.on('error', reject);
       gzip.end(backupBuffer);
@@ -113,15 +124,18 @@ export async function createSafeBackup(): Promise<{ buffer: Buffer; metadata: Ba
     // 清理临时文件
     fs.unlinkSync(backupPath);
 
-    logger.info({
-      originalSize: backupBuffer.length,
-      compressedSize: compressed.length,
-      encryptedSize: encrypted.length,
-      ratio: ((compressed.length / backupBuffer.length) * 100).toFixed(1) + '%',
-    }, 'Backup created successfully');
+    logger.info(
+      {
+        originalSize: backupBuffer.length,
+        compressedSize: compressed.length,
+        encryptedSize: encrypted.length,
+        ratio:
+          ((compressed.length / backupBuffer.length) * 100).toFixed(1) + '%',
+      },
+      'Backup created successfully',
+    );
 
     return { buffer: encrypted, metadata };
-
   } catch (err) {
     // 清理临时文件
     if (fs.existsSync(backupPath)) {
@@ -180,15 +194,16 @@ export async function restoreFromBackup(filename?: string): Promise<void> {
   let targetFile = filename;
   if (!targetFile) {
     const { blobs } = await list({ prefix: `${BACKUP_PREFIX}/daily/`, token });
-    const dbBlobs = blobs.filter(b => !b.pathname.endsWith('.meta.json'));
+    const dbBlobs = blobs.filter((b) => !b.pathname.endsWith('.meta.json'));
 
     if (dbBlobs.length === 0) {
       throw new Error('No backup found');
     }
 
     // 按时间排序，取最新的
-    targetFile = dbBlobs.sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    targetFile = dbBlobs.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
     )[0].pathname;
   }
 
@@ -203,7 +218,7 @@ export async function restoreFromBackup(filename?: string): Promise<void> {
   }
 
   // 下载元数据
-  const metaBlob = blobs.find(b => b.pathname === `${targetFile}.meta.json`);
+  const metaBlob = blobs.find((b) => b.pathname === `${targetFile}.meta.json`);
   let metadata: BackupMetadata | undefined;
 
   if (metaBlob) {
@@ -222,7 +237,7 @@ export async function restoreFromBackup(filename?: string): Promise<void> {
   const dbBuffer = await new Promise<Buffer>((resolve, reject) => {
     const gunzip = createGunzip();
     const chunks: Buffer[] = [];
-    gunzip.on('data', chunk => chunks.push(chunk));
+    gunzip.on('data', (chunk) => chunks.push(chunk));
     gunzip.on('end', () => resolve(Buffer.concat(chunks)));
     gunzip.on('error', reject);
     gunzip.end(compressed);
@@ -268,14 +283,15 @@ export async function cleanupOldBackups(): Promise<void> {
   }
 
   const { blobs } = await list({ prefix: BACKUP_PREFIX, token });
-  const dbBlobs = blobs.filter(b => !b.pathname.endsWith('.meta.json'));
+  const dbBlobs = blobs.filter((b) => !b.pathname.endsWith('.meta.json'));
 
   const now = new Date();
   const toDelete: string[] = [];
 
   for (const blob of dbBlobs) {
     const uploadDate = new Date(blob.uploadedAt);
-    const ageDays = (now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24);
+    const ageDays =
+      (now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24);
 
     const isWeekly = uploadDate.getDay() === 0; // 周日
     const isMonthly = uploadDate.getDate() === 1; // 每月1号
@@ -316,15 +332,16 @@ export async function verifyLatestBackup(): Promise<boolean> {
 
   try {
     const { blobs } = await list({ prefix: `${BACKUP_PREFIX}/daily/`, token });
-    const dbBlobs = blobs.filter(b => !b.pathname.endsWith('.meta.json'));
+    const dbBlobs = blobs.filter((b) => !b.pathname.endsWith('.meta.json'));
 
     if (dbBlobs.length === 0) {
       logger.warn('No backups found to verify');
       return false;
     }
 
-    const latest = dbBlobs.sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    const latest = dbBlobs.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
     )[0];
 
     // 下载并尝试解密

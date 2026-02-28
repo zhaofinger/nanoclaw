@@ -123,6 +123,21 @@ export class GroupQueue {
     );
   }
 
+  /**
+   * Cancel a pending task by ID. Returns true if task was found and removed.
+   */
+  cancelTask(taskId: string): boolean {
+    for (const [groupJid, state] of this.groups) {
+      const index = state.pendingTasks.findIndex((t) => t.id === taskId);
+      if (index !== -1) {
+        state.pendingTasks.splice(index, 1);
+        logger.info({ taskId, groupJid }, 'Pending task cancelled');
+        return true;
+      }
+    }
+    return false;
+  }
+
   registerProcess(
     groupJid: string,
     proc: ChildProcess,

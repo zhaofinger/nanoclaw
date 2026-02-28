@@ -527,6 +527,7 @@ async function main(): Promise<void> {
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>
       writeGroupsSnapshot(gf, im, ag, rj),
+    groupQueue: queue,
   });
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();

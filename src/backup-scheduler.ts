@@ -1,5 +1,13 @@
-import { uploadBackup, cleanupOldBackups, verifyLatestBackup } from './backup-safe.js';
-import { backupToGit, startGitBackupScheduler, isGitBackupConfigured } from './git-backup.js';
+import {
+  uploadBackup,
+  cleanupOldBackups,
+  verifyLatestBackup,
+} from './backup-safe.js';
+import {
+  backupToGit,
+  startGitBackupScheduler,
+  isGitBackupConfigured,
+} from './git-backup.js';
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
 
@@ -80,26 +88,41 @@ export function startBackupScheduler(): void {
 
   schedulerStarted = true;
 
-  logger.info({
-    sqliteEnabled: config.sqliteEnabled,
-    sqliteInterval: config.sqliteIntervalMinutes,
-    gitEnabled: config.gitEnabled,
-    gitInterval: config.gitIntervalMinutes,
-  }, 'Starting backup scheduler');
+  logger.info(
+    {
+      sqliteEnabled: config.sqliteEnabled,
+      sqliteInterval: config.sqliteIntervalMinutes,
+      gitEnabled: config.gitEnabled,
+      gitInterval: config.gitIntervalMinutes,
+    },
+    'Starting backup scheduler',
+  );
 
   // SQLite 备份调度（默认每小时）
   if (config.sqliteEnabled) {
     // 立即执行一次
-    uploadBackup().catch(err => logger.error({ err }, 'Initial SQLite backup failed'));
+    uploadBackup().catch((err) =>
+      logger.error({ err }, 'Initial SQLite backup failed'),
+    );
 
-    setInterval(() => {
-      uploadBackup().catch(err => logger.error({ err }, 'Scheduled SQLite backup failed'));
-    }, config.sqliteIntervalMinutes * 60 * 1000);
+    setInterval(
+      () => {
+        uploadBackup().catch((err) =>
+          logger.error({ err }, 'Scheduled SQLite backup failed'),
+        );
+      },
+      config.sqliteIntervalMinutes * 60 * 1000,
+    );
 
     // 清理旧备份（每天一次）
-    setInterval(() => {
-      cleanupOldBackups().catch(err => logger.error({ err }, 'Cleanup old backups failed'));
-    }, 24 * 60 * 60 * 1000);
+    setInterval(
+      () => {
+        cleanupOldBackups().catch((err) =>
+          logger.error({ err }, 'Cleanup old backups failed'),
+        );
+      },
+      24 * 60 * 60 * 1000,
+    );
   }
 
   // Git 备份调度（默认每 30 分钟）

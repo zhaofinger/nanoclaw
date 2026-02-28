@@ -8,7 +8,10 @@ import path from 'path';
 import fs from 'fs';
 
 const BACKUP_PREFIX = 'nanoclaw-backup';
-const KEY = Buffer.from(process.env.BACKUP_KEY?.padEnd(32, '0').slice(0, 32) || 'nanoclaw-backup-key-32-chars!');
+const KEY = Buffer.from(
+  process.env.BACKUP_KEY?.padEnd(32, '0').slice(0, 32) ||
+    'nanoclaw-backup-key-32-chars!',
+);
 
 /**
  * Encrypt buffer using AES-256-CBC
@@ -62,10 +65,14 @@ export async function uploadBackup(): Promise<void> {
   const backupBuffer = await createBackup();
 
   // Upload daily backup
-  await put(`${BACKUP_PREFIX}/daily/messages-${timestamp}.db.enc.gz`, backupBuffer, {
-    access: 'private',
-    contentType: 'application/octet-stream',
-  });
+  await put(
+    `${BACKUP_PREFIX}/daily/messages-${timestamp}.db.enc.gz`,
+    backupBuffer,
+    {
+      access: 'private',
+      contentType: 'application/octet-stream',
+    },
+  );
 
   console.log(`Backup uploaded: ${backupBuffer.length} bytes`);
 }
@@ -82,8 +89,9 @@ export async function restoreFromBackup(): Promise<void> {
   }
 
   // Sort by uploadedAt, get latest
-  const latest = blobs.sort((a, b) =>
-    new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+  const latest = blobs.sort(
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
   )[0];
 
   console.log(`Restoring from: ${latest.url}`);
@@ -134,7 +142,8 @@ export async function cleanupOldBackups(): Promise<void> {
 
   for (const blob of blobs) {
     const uploadDate = new Date(blob.uploadedAt);
-    const ageDays = (now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24);
+    const ageDays =
+      (now.getTime() - uploadDate.getTime()) / (1000 * 60 * 60 * 24);
 
     // Keep if:
     // - Less than 7 days old (daily)
@@ -171,8 +180,9 @@ export async function verifyBackup(): Promise<boolean> {
     if (blobs.length === 0) return false;
 
     // Try to download and decrypt latest backup
-    const latest = blobs.sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    const latest = blobs.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
     )[0];
 
     const response = await fetch(latest.url);

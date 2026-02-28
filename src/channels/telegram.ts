@@ -195,7 +195,10 @@ export class TelegramChannel implements Channel {
         const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
         const response = await fetch(fileUrl);
         if (!response.ok) {
-          logger.warn({ fileUrl, status: response.status }, 'Failed to download photo from Telegram');
+          logger.warn(
+            { fileUrl, status: response.status },
+            'Failed to download photo from Telegram',
+          );
           return;
         }
 
@@ -215,7 +218,10 @@ export class TelegramChannel implements Channel {
 
         // Return relative path from group directory (agent sees /workspace/group/)
         const relativePath = path.join('media', fileName);
-        logger.info({ filePath: relativePath, group: group.folder }, 'Telegram photo saved');
+        logger.info(
+          { filePath: relativePath, group: group.folder },
+          'Telegram photo saved',
+        );
         return relativePath;
       } catch (err) {
         logger.error({ err, chatJid }, 'Failed to download Telegram photo');

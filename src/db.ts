@@ -376,6 +376,23 @@ export function getTasksForGroup(groupFolder: string): ScheduledTask[] {
     .all(groupFolder) as ScheduledTask[];
 }
 
+export function findExistingTask(
+  groupFolder: string,
+  prompt: string,
+  scheduleType: string,
+  scheduleValue: string,
+): ScheduledTask | undefined {
+  return db
+    .prepare(
+      `SELECT * FROM scheduled_tasks
+       WHERE group_folder = ? AND prompt = ? AND schedule_type = ? AND schedule_value = ?
+       AND status IN ('active', 'paused')`,
+    )
+    .get(groupFolder, prompt, scheduleType, scheduleValue) as
+    | ScheduledTask
+    | undefined;
+}
+
 export function getAllTasks(): ScheduledTask[] {
   return db
     .prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC')
