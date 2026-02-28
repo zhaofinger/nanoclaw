@@ -11,6 +11,7 @@ const envConfig = readEnvFile([
   'ASSISTANT_HAS_OWN_NUMBER',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_ONLY',
+  'TZ',
 ]);
 
 export const ASSISTANT_NAME =
@@ -64,9 +65,9 @@ export const TRIGGER_PATTERN = new RegExp(
 );
 
 // Timezone for scheduled tasks (cron expressions, etc.)
-// Uses system timezone by default
+// Priority: .env TZ > process.env.TZ > system timezone
 export const TIMEZONE =
-  process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  envConfig.TZ || process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Telegram configuration
 export const TELEGRAM_BOT_TOKEN =
