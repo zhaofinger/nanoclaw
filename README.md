@@ -3,178 +3,188 @@
 </p>
 
 <p align="center">
-  An AI assistant that runs agents securely in their own containers. Lightweight, built to be easily understood and completely customized for your needs.
+  NanoClaw —— 您的专属 Claude 助手，在容器中安全运行。它轻巧易懂，并能根据您的个人需求灵活定制。
 </p>
 
 <p align="center">
   <a href="https://nanoclaw.dev">nanoclaw.dev</a>&nbsp; • &nbsp;
-  <a href="README_zh.md">中文</a>&nbsp; • &nbsp;
+  <a href="README_en.md">English</a>&nbsp; • &nbsp;
   <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>&nbsp; • &nbsp;
   <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
 </p>
 
-Using Claude Code, NanoClaw can dynamically rewrite its code to customize its feature set for your needs.
+**新功能：** 首个支持 [Agent Swarms（智能体集群）](https://code.claude.com/docs/en/agent-teams) 的 AI 助手。可轻松组建智能体团队，在您的聊天中高效协作。
 
-**New:** First AI assistant to support [Agent Swarms](https://code.claude.com/docs/en/agent-teams). Spin up teams of agents that collaborate in your chat.
+## 我为什么创建这个项目
 
-## Why I Built NanoClaw
+[OpenClaw](https://github.com/openclaw/openclaw) 是一个令人印象深刻的项目，愿景宏大。但我无法安心使用一个我不了解却能访问我个人隐私的软件。OpenClaw 有 52+ 个模块、8 个配置管理文件、45+ 个依赖项，以及为 15 个渠道提供商设计的抽象层。其安全性是应用级别的（通过白名单、配对码实现），而非操作系统级别的隔离。所有东西都在一个共享内存的 Node 进程中运行。
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
+NanoClaw 用一个您能在 8 分钟内理解的代码库，为您提供了同样的核心功能。只有一个进程，少数几个文件。智能体（Agent）运行在具有文件系统隔离的真实 Linux 容器中，而不是依赖于权限检查。
 
-NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. Claude agents run in their own Linux containers with filesystem isolation, not merely behind permission checks.
-
-## Quick Start
+## 快速开始
 
 ```bash
-git clone https://github.com/qwibitai/NanoClaw.git
-cd NanoClaw
+git clone https://github.com/qwibitai/nanoclaw.git
+cd nanoclaw
 claude
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup and service configuration.
+然后运行 `/setup`。Claude Code 会处理一切：依赖安装、身份验证、容器设置、服务配置。
 
-## Philosophy
+## 设计哲学
 
-**Small enough to understand.** One process, a few source files and no microservices. If you want to understand the full NanoClaw codebase, just ask Claude Code to walk you through it.
+**小巧易懂：** 单一进程，少量源文件。无微服务、无消息队列、无复杂抽象层。让 Claude Code 引导您轻松上手。
 
-**Secure by isolation.** Agents run in Linux containers (Apple Container on macOS, or Docker) and they can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+**通过隔离保障安全:** 智能体运行在 Linux 容器（在 macOS 上是 Apple Container，或 Docker）中。它们只能看到被明确挂载的内容。即便通过 Bash 访问也十分安全，因为所有命令都在容器内执行，不会直接操作您的宿主机。
 
-**Built for the individual user.** NanoClaw isn't a monolithic framework; it's software that fits each user's exact needs. Instead of becoming bloatware, NanoClaw is designed to be bespoke. You make your own fork and have Claude Code modify it to match your needs.
+**为单一用户打造:** 这不是一个框架，是一个完全符合我个人需求的、可工作的软件。您可以 Fork 本项目，然后让 Claude Code 根据您的精确需求进行修改和适配。
 
-**Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that it's safe to make changes.
+**定制即代码修改:** 没有繁杂的配置文件。想要不同的行为？直接修改代码。代码库足够小，这样做是安全的。
 
-**AI-native.**
-- No installation wizard; Claude Code guides setup.
-- No monitoring dashboard; ask Claude what's happening.
-- No debugging tools; describe the problem and Claude fixes it.
+**AI 原生:** 无安装向导(由 Claude Code 指导安装)。无需监控仪表盘，直接询问 Claude 即可了解系统状况。无调试工具(描述问题，Claude 会修复它)。
 
-**Skills over features.** Instead of adding features (e.g. support for Telegram) to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
+**技能（Skills）优于功能（Features）:** 贡献者不应该向代码库添加新功能（例如支持 Telegram）。相反，他们应该贡献像 `/add-telegram` 这样的 [Claude Code 技能](https://code.claude.com/docs/en/skills)，这些技能可以改造您的 fork。最终，您得到的是只做您需要事情的整洁代码。
 
-**Best harness, best model.** NanoClaw runs on the Claude Agent SDK, which means you're running Claude Code directly. Claude Code is highly capable and its coding and problem-solving capabilities allow it to modify and expand NanoClaw and tailor it to each user.
+**最好的工具套件，最好的模型:** 本项目运行在 Claude Agent SDK 之上，这意味着您直接运行的就是 Claude Code。工具套件至关重要。一个低效的工具套件会让再聪明的模型也显得迟钝，而一个优秀的套件则能赋予它们超凡的能力。Claude Code (在我看来) 是市面上最好的工具套件。
 
-## What It Supports
+## 功能支持
 
-- **Messenger I/O** - Message NanoClaw from your phone. Supports WhatsApp, Telegram, Discord, Slack, Signal and headless operation.
-- **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted to it.
-- **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
-- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
-- **Web access** - Search and fetch content from the Web
-- **Container isolation** - Agents are sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
-- **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks. NanoClaw is the first personal AI assistant to support agent swarms.
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
+- **WhatsApp / Telegram 输入输出** - 通过手机给 Claude 发消息
+- **Telegram 独立模式** - 支持纯 Telegram 模式（无需 WhatsApp）
+- **图片处理** - 支持接收和分析 Telegram 发送的图片
+- **消息反应** - 支持 Telegram 消息表情反应
+- **隔离的群组上下文** - 每个群组都拥有独立的 `CLAUDE.md` 记忆和隔离的文件系统。它们在各自的容器沙箱中运行，且仅挂载所需的文件系统。
+- **主频道** - 您的私有频道（self-chat），用于管理控制；其他所有群组都完全隔离
+- **计划任务** - 运行 Claude 的周期性作业，并可以给您回发消息
+- **定时任务管理** - 防止重复任务创建，支持任务取消和队列管理
+- **备份系统** - 自动加密备份数据库到 Vercel Blob，支持 Gzip 压缩
+- **网络访问** - 搜索和抓取网页内容
+- **容器隔离** - 智能体在 Apple Container (macOS) 或 Docker (macOS/Linux) 的沙箱中运行
+- **智能体集群（Agent Swarms）** - 启动多个专业智能体团队，协作完成复杂任务（首个支持此功能的个人 AI 助手）
+- **可选集成** - 通过技能添加 Gmail (`/add-gmail`) 等更多功能
 
-## Usage
+## 使用方法
 
-Talk to your assistant with the trigger word (default: `@Andy`):
+使用触发词（默认为 `@Andy`）与您的助手对话：
 
 ```
-@Andy send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
-@Andy review the git history for the past week each Friday and update the README if there's drift
-@Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
+@Andy 每周一到周五早上9点，给我发一份销售渠道的概览（需要访问我的 Obsidian vault 文件夹）
+@Andy 每周五回顾过去一周的 git 历史，如果与 README 有出入，就更新它
+@Andy 每周一早上8点，从 Hacker News 和 TechCrunch 收集关于 AI 发展的资讯，然后发给我一份简报
 ```
 
-From the main channel (your self-chat), you can manage groups and tasks:
+在主频道（您的self-chat）中，可以管理群组和任务：
 ```
-@Andy list all scheduled tasks across groups
-@Andy pause the Monday briefing task
-@Andy join the Family Chat group
+@Andy 列出所有群组的计划任务
+@Andy 暂停周一简报任务
+@Andy 加入"家庭聊天"群组
 ```
 
-## Customizing
+## 定制
 
-NanoClaw doesn't use configuration files. To make changes, just tell Claude Code what you want:
+没有需要学习的配置文件。直接告诉 Claude Code 您想要什么：
 
-- "Change the trigger word to @Bob"
-- "Remember in the future to make responses shorter and more direct"
-- "Add a custom greeting when I say good morning"
-- "Store conversation summaries weekly"
+- "把触发词改成 @Bob"
+- "记住以后回答要更简短直接"
+- "当我说早上好的时候，加一个自定义的问候"
+- "每周存储一次对话摘要"
 
-Or run `/customize` for guided changes.
+或者运行 `/customize` 进行引导式修改。
 
-The codebase is small enough that Claude can safely modify it.
+代码库足够小，Claude 可以安全地修改它。
 
-## Contributing
+## 贡献
 
-**Don't add features. Add skills.**
+**不要添加功能，而是添加技能。**
 
-If you want to add Telegram support, don't create a PR that adds Telegram alongside WhatsApp. Instead, contribute a skill file (`.claude/skills/add-telegram/SKILL.md`) that teaches Claude Code how to transform a NanoClaw installation to use Telegram.
+如果您想添加 Telegram 支持，不要创建一个 PR 同时添加 Telegram 和 WhatsApp。而是贡献一个技能文件 (`.claude/skills/add-telegram/SKILL.md`)，教 Claude Code 如何改造一个 NanoClaw 安装以使用 Telegram。
 
-Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
+然后用户在自己的 fork 上运行 `/add-telegram`，就能得到只做他们需要事情的整洁代码，而不是一个试图支持所有用例的臃肿系统。
 
-### RFS (Request for Skills)
+### RFS (技能征集)
 
-Skills we'd like to see:
+我们希望看到的技能：
 
-**Communication Channels**
-- `/add-slack` - Add Slack
+**通信渠道**
+- `/add-telegram` - 添加 Telegram 作为渠道。应提供选项让用户选择替换 WhatsApp 或作为额外渠道添加。也应能将其添加为控制渠道（可以触发动作）或仅作为被其他地方触发的动作所使用的渠道。
+- `/add-slack` - 添加 Slack
+- `/add-discord` - 添加 Discord
 
-**Session Management**
-- `/clear` - Add a `/clear` command that compacts the conversation (summarizes context while preserving critical information in the same session). Requires figuring out how to trigger compaction programmatically via the Claude Agent SDK.
+**平台支持**
+- `/setup-windows` - 通过 WSL2 + Docker 支持 Windows
 
-## Requirements
+**会话管理**
+- `/add-clear` - 添加一个 `/clear` 命令，用于压缩会话（在同一会话中总结上下文，同时保留关键信息）。这需要研究如何通过 Claude Agent SDK 以编程方式触发压缩。
 
-- macOS or Linux
+## 系统要求
+
+- macOS 或 Linux
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- [Apple Container](https://github.com/apple/container) (macOS) 或 [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
 
-## Architecture
+## 架构
 
 ```
-WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+WhatsApp (baileys) --> SQLite --> 轮询循环 --> 容器 (Claude Agent SDK) --> 响应
 ```
 
-Single Node.js process. Agents execute in isolated Linux containers with filesystem isolation. Only mounted directories are accessible. Per-group message queue with concurrency control. IPC via filesystem.
+单一 Node.js 进程。智能体在具有挂载目录的隔离 Linux 容器中执行。每个群组的消息队列都带有全局并发控制。通过文件系统进行进程间通信（IPC）。
 
-Key files:
-- `src/index.ts` - Orchestrator: state, message loop, agent invocation
-- `src/channels/whatsapp.ts` - WhatsApp connection, auth, send/receive
-- `src/ipc.ts` - IPC watcher and task processing
-- `src/router.ts` - Message formatting and outbound routing
-- `src/group-queue.ts` - Per-group queue with global concurrency limit
-- `src/container-runner.ts` - Spawns streaming agent containers
-- `src/task-scheduler.ts` - Runs scheduled tasks
-- `src/db.ts` - SQLite operations (messages, groups, sessions, state)
-- `groups/*/CLAUDE.md` - Per-group memory
+关键文件：
+- `src/index.ts` - 编排器：状态管理、消息循环、智能体调用
+- `src/channels/whatsapp.ts` - WhatsApp 连接、认证、收发消息
+- `src/channels/telegram.ts` - Telegram 连接、消息处理
+- `src/ipc.ts` - IPC 监听与任务处理
+- `src/router.ts` - 消息格式化与出站路由
+- `src/group-queue.ts` - 各带全局并发限制的群组队列
+- `src/container-runner.ts` - 生成流式智能体容器
+- `src/task-scheduler.ts` - 运行计划任务
+- `src/db.ts` - SQLite 操作（消息、群组、会话、状态）
+- `groups/*/CLAUDE.md` - 各群组的记忆
 
 ## FAQ
 
-**Why Docker?**
+**为什么是 WhatsApp 而不是 Telegram/Signal 等？**
 
-Docker provides cross-platform support (macOS, Linux and even Windows via WSL2) and a mature ecosystem. On macOS, you can optionally switch to Apple Container via `/convert-to-apple-container` for a lighter-weight native runtime.
+因为我用 WhatsApp。Fork 这个项目然后运行一个技能来改变它。正是这个项目的核心理念。
 
-**Can I run this on Linux?**
+**为什么是 Docker？**
 
-Yes. Docker is the default runtime and works on both macOS and Linux. Just run `/setup`.
+Docker 提供跨平台支持（macOS 和 Linux）和成熟的生态系统。在 macOS 上，您可以选择通过运行 `/convert-to-apple-container` 切换到 Apple Container，以获得更轻量级的原生运行时体验。
 
-**Is this secure?**
+**我可以在 Linux 上运行吗？**
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
+可以。Docker 是默认的容器运行时，在 macOS 和 Linux 上都可以使用。只需运行 `/setup`。
 
-**Why no configuration files?**
+**这个项目安全吗？**
 
-We don't want configuration sprawl. Every user should customize NanoClaw so that the code does exactly what they want, rather than configuring a generic system. If you prefer having config files, you can tell Claude to add them.
+智能体在容器中运行，而不是在应用级别的权限检查之后。它们只能访问被明确挂载的目录。您仍然应该审查您运行的代码，但这个代码库小到您真的可以做到。完整的安全模型请见 [docs/SECURITY.md](docs/SECURITY.md)。
 
-**How do I debug issues?**
+**为什么没有配置文件？**
 
-Ask Claude Code. "Why isn't the scheduler running?" "What's in the recent logs?" "Why did this message not get a response?" That's the AI-native approach that underlies NanoClaw.
+我们不希望配置泛滥。每个用户都应该定制它，让代码完全符合他们的需求，而不是去配置一个通用的系统。如果您喜欢用配置文件，告诉 Claude 让它加上。
 
-**Why isn't the setup working for me?**
+**我该如何调试问题？**
 
-If you have issues, during setup, Claude will try to dynamically fix them. If that doesn't work, run `claude`, then run `/debug`. If Claude finds an issue that is likely affecting other users, open a PR to modify the setup SKILL.md.
+问 Claude Code。"为什么计划任务没有运行？" "最近的日志里有什么？" "为什么这条消息没有得到回应？" 这就是 AI 原生的方法。
 
-**What changes will be accepted into the codebase?**
+**为什么我的安装不成功？**
 
-Only security fixes, bug fixes, and clear improvements will be accepted to the base configuration. That's all.
+我不知道。运行 `claude`，然后运行 `/debug`。如果 Claude 发现一个可能影响其他用户的问题，请开一个 PR 来修改 `SKILL.md` 安装文件。
 
-Everything else (new capabilities, OS compatibility, hardware support, enhancements) should be contributed as skills.
+**什么样的代码更改会被接受？**
 
-This keeps the base system minimal and lets every user customize their installation without inheriting features they don't want.
+安全修复、bug 修复，以及对基础配置的明确改进。仅此而已。
 
-## Community
+其他一切（新功能、操作系统兼容性、硬件支持、增强功能）都应该作为技能来贡献。
 
-Questions? Ideas? [Join the Discord](https://discord.gg/VDdww8qS42).
+这使得基础系统保持最小化，并让每个用户可以定制他们的安装，而无需继承他们不想要的功能。
 
-## License
+## 社区
+
+有任何疑问或建议？欢迎[加入 Discord 社区](https://discord.gg/VDdww8qS42)与我们交流。
+
+## 许可证
 
 MIT
