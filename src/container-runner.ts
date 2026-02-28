@@ -223,6 +223,14 @@ function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
+  // Pass GitHub token for git operations (if available)
+  // Read from .env file (not process.env, to avoid leaking to other parts)
+  const ghSecrets = readEnvFile(['GH_TOKEN']);
+  const ghToken = ghSecrets.GH_TOKEN || process.env.GH_TOKEN;
+  if (ghToken) {
+    args.push('-e', `GH_TOKEN=${ghToken}`);
+  }
+
   // Run as host user so bind-mounted files are accessible.
   // Skip when running as root (uid 0), as the container's node user (uid 1000),
   // or when getuid is unavailable (native Windows without WSL).
