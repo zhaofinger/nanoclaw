@@ -25,6 +25,7 @@ import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup, ScheduledTask } from './types.js';
+import { detectApiError, formatTaskApiErrorMessage } from './api-error.js';
 
 export interface SchedulerDependencies {
   registeredGroups: () => Record<string, RegisteredGroup>;
@@ -179,6 +180,24 @@ async function runTask(
     if (closeTimer) clearTimeout(closeTimer);
     error = err instanceof Error ? err.message : String(err);
     logger.error({ taskId: task.id, error }, 'Task failed');
+  }
+
+  // Handle API errors: notify user and pause task to prevent retry churn
+  if (error) {
+    const apiError = detectApiError(error);
+
+    if (apiError.isApiError) {
+      // Pause the task to prevent continuous failures
+      updateTask(task.id, { status: 'paused' });
+
+      // Notify user about the API error
+      const errorMsg = formatTaskApiErrorMessage(task.prompt, error);
+      await deps.sendMessage(task.chat_jid, errorMsg);
+      logger.warn(
+        { taskId: task.id, error, errorType: apiError.errorType },
+        'Task paused due to API error, user notified',
+      );
+    }
   }
 
   const durationMs = Date.now() - startTime;

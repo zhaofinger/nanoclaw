@@ -25,6 +25,12 @@ import {
 } from './container-runtime.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
+import {
+  getSecretsForContainer,
+  loadApiKeys,
+  reportError as reportApiKeyError,
+  reportSuccess as reportApiKeySuccess,
+} from './api-key-manager.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
@@ -202,13 +208,21 @@ function buildVolumeMounts(
 /**
  * Read allowed secrets from .env for passing to the container via stdin.
  * Secrets are never written to disk or mounted as files.
+ * Uses API key manager for dynamic key switching.
  */
 function readSecrets(): Record<string, string> {
-  return readEnvFile([
+  // Initialize API keys if not already loaded
+  loadApiKeys();
+
+  // Get current API key from manager
+  const apiSecrets = getSecretsForContainer();
+
+  // Also get OAuth token if available (for Claude Code)
+  const oauthSecrets = readEnvFile([
     'CLAUDE_CODE_OAUTH_TOKEN',
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_BASE_URL',
   ]);
+
+  return { ...oauthSecrets, ...apiSecrets };
 }
 
 function buildContainerArgs(
@@ -548,13 +562,23 @@ export async function runContainerAgent(
           'Container exited with error',
         );
 
+        const errorMsg = `Container exited with code ${code}: ${stderr.slice(-200)}`;
+
+        // Report API key error for potential key switching
+        reportApiKeyError(errorMsg).catch((err) =>
+          logger.warn({ err }, 'Failed to report API key error'),
+        );
+
         resolve({
           status: 'error',
           result: null,
-          error: `Container exited with code ${code}: ${stderr.slice(-200)}`,
+          error: errorMsg,
         });
         return;
       }
+
+      // Report API key success
+      reportApiKeySuccess();
 
       // Streaming mode: wait for output chain to settle, return completion marker
       if (onOutput) {

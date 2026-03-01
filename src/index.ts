@@ -44,6 +44,12 @@ import { findChannel, formatMessages, formatOutbound } from './router.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
+import { detectApiError } from './api-error.js';
+import {
+  getKeyStatus,
+  loadApiKeys,
+  onKeySwitch,
+} from './api-key-manager.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
@@ -225,6 +231,36 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   if (idleTimer) clearTimeout(idleTimer);
 
   if (output === 'error' || hadError) {
+    // Check for API errors and notify user
+    if (!outputSentToUser) {
+      // Try to get error details from logs
+      let errorDetails = '';
+      const groupDir = resolveGroupFolderPath(group.folder);
+      const logsDir = path.join(groupDir, 'logs');
+      const logFiles = fs.readdirSync(logsDir)
+        .filter(f => f.startsWith('container-'))
+        .sort()
+        .reverse();
+      if (logFiles.length > 0) {
+        const latestLog = fs.readFileSync(path.join(logsDir, logFiles[0]), 'utf-8');
+        const stderrMatch = latestLog.match(/=== Stderr[^=]*===\n([\s\S]*?)(?:\n===|$)/);
+        if (stderrMatch) {
+          errorDetails = stderrMatch[1].trim();
+        }
+      }
+
+      const apiError = detectApiError(errorDetails);
+      if (apiError.isApiError) {
+        await channel.sendMessage(chatJid, apiError.userMessage);
+        // Advance cursor so we don't retry on API errors
+        logger.warn(
+          { group: group.name, errorType: apiError.errorType },
+          'API error reported to user, advancing cursor',
+        );
+        return true;
+      }
+    }
+
     // If we already sent output to the user, don't roll back the cursor —
     // the user got their response and re-processing would send duplicates.
     if (outputSentToUser) {
@@ -454,6 +490,33 @@ async function main(): Promise<void> {
   ensureContainerSystemRunning();
   initDatabase();
   logger.info('Database initialized');
+
+  // Initialize API keys and set up key switch notification
+  loadApiKeys();
+  onKeySwitch(async (newKey, reason) => {
+    logger.info({ newKey: newKey.name, reason }, 'API key switched');
+    // Notify main group about key switch
+    const mainGroup = Object.values(registeredGroups).find(
+      (g) => g.folder === MAIN_GROUP_FOLDER,
+    );
+    if (mainGroup) {
+      const channel = findChannel(channels, Object.entries(registeredGroups).find(
+        ([, g]) => g.folder === MAIN_GROUP_FOLDER,
+      )?.[0] || '');
+      if (channel) {
+        const msg = `🔄 **API Key 已切换**\n\n` +
+          `原因：${reason}\n` +
+          `当前 Key：${newKey.name}`;
+        await channel.sendMessage(
+          Object.entries(registeredGroups).find(
+            ([, g]) => g.folder === MAIN_GROUP_FOLDER,
+          )?.[0] || '',
+          msg,
+        ).catch((err) => logger.warn({ err }, 'Failed to notify key switch'));
+      }
+    }
+  });
+
   loadState();
 
   // Graceful shutdown handlers
