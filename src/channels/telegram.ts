@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { ASSISTANT_NAME, GROUPS_DIR, TRIGGER_PATTERN } from '../config.js';
+import { getKeyStatus } from '../api-key-manager.js';
 import { logger } from '../logger.js';
 import {
   Channel,
@@ -32,6 +33,13 @@ export class TelegramChannel implements Channel {
   async connect(): Promise<void> {
     this.bot = new Bot(this.botToken);
 
+    // Set bot command menu
+    await this.bot.api.setMyCommands([
+      { command: 'status', description: '查看 bot 状态和 API key 信息' },
+      { command: 'chatid', description: '获取当前聊天的注册 ID' },
+      { command: 'ping', description: '检查 bot 是否在线' },
+    ]);
+
     // Command to get chat ID (useful for registration)
     this.bot.command('chatid', (ctx) => {
       const chatId = ctx.chat.id;
@@ -50,6 +58,57 @@ export class TelegramChannel implements Channel {
     // Command to check bot status
     this.bot.command('ping', (ctx) => {
       ctx.reply(`${ASSISTANT_NAME} is online.`);
+    });
+
+    // Command to get detailed status
+    this.bot.command('status', async (ctx) => {
+      try {
+        const keyStatus = getKeyStatus();
+
+        // Check container runtime
+        let containerStatus = 'Unknown';
+        try {
+          const { execSync } = await import('child_process');
+          execSync('docker info', { stdio: 'ignore' });
+          containerStatus = '✅ Running';
+        } catch {
+          containerStatus = '❌ Not running';
+        }
+
+        // Get active containers
+        let activeContainers = 0;
+        try {
+          const { execSync } = await import('child_process');
+          const output = execSync(
+            'docker ps --filter name=nanoclaw --format "{{.Names}}" 2>/dev/null || echo ""',
+            { encoding: 'utf-8' }
+          );
+          activeContainers = output.trim() ? output.trim().split('\n').length : 0;
+        } catch {
+          activeContainers = 0;
+        }
+
+        const statusText = [
+          `*${ASSISTANT_NAME} Status*`,
+          '',
+          `🤖 *Bot*: Online`,
+          `🐳 *Container Runtime*: ${containerStatus}`,
+          `📦 *Active Containers*: ${activeContainers}`,
+          '',
+          `🔑 *API Keys*:`,
+          `  • Total: ${keyStatus.totalKeys}`,
+          `  • Available: ${keyStatus.availableKeys}`,
+          `  • Current: ${keyStatus.currentKey}`,
+          ...keyStatus.keys.map(
+            (k) => `  • ${k.name}: ${k.available ? '🟢' : '🔴'} (${k.errors} errors)`
+          ),
+        ].join('\n');
+
+        ctx.reply(statusText, { parse_mode: 'Markdown' });
+      } catch (err) {
+        logger.error({ err }, 'Failed to get status');
+        ctx.reply('Failed to retrieve status. Please try again later.');
+      }
     });
 
     this.bot.on('message:text', async (ctx) => {
