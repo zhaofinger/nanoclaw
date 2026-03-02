@@ -218,9 +218,7 @@ function readSecrets(): Record<string, string> {
   const apiSecrets = getSecretsForContainer();
 
   // Also get OAuth token if available (for Claude Code)
-  const oauthSecrets = readEnvFile([
-    'CLAUDE_CODE_OAUTH_TOKEN',
-  ]);
+  const oauthSecrets = readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN']);
 
   return { ...oauthSecrets, ...apiSecrets };
 }

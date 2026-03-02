@@ -54,7 +54,9 @@ const MAX_ERROR_COUNT = 3;
 
 let keyStates: ApiKeyState[] = [];
 let currentIndex = 0;
-let onKeySwitchCallback: ((newKey: ApiKeyConfig, reason: string) => Promise<void>) | null = null;
+let onKeySwitchCallback:
+  | ((newKey: ApiKeyConfig, reason: string) => Promise<void>)
+  | null = null;
 
 /**
  * Load API keys from .env file.
@@ -83,8 +85,11 @@ export function loadApiKeys(): void {
     try {
       const parsed = JSON.parse(jsonConfigs);
       if (Array.isArray(parsed)) {
-        configs.push(...parsed.filter(c => isValidConfig(c)));
-        logger.info({ count: configs.length }, 'Loaded API keys from ANTHROPIC_KEY_CONFIGS');
+        configs.push(...parsed.filter((c) => isValidConfig(c)));
+        logger.info(
+          { count: configs.length },
+          'Loaded API keys from ANTHROPIC_KEY_CONFIGS',
+        );
       }
     } catch (e) {
       logger.warn({ err: e }, 'Failed to parse ANTHROPIC_KEY_CONFIGS');
@@ -113,7 +118,7 @@ export function loadApiKeys(): void {
     configs.push(...legacyConfigs);
   }
 
-  keyStates = configs.map(config => ({
+  keyStates = configs.map((config) => ({
     config,
     isAvailable: true,
     errorCount: 0,
@@ -125,7 +130,7 @@ export function loadApiKeys(): void {
     logger.warn('No API keys loaded');
   } else {
     logger.info(
-      { keyCount: keyStates.length, keyNames: configs.map(c => c.name) },
+      { keyCount: keyStates.length, keyNames: configs.map((c) => c.name) },
       'API keys loaded',
     );
   }
@@ -153,7 +158,10 @@ function loadLegacyConfigs(content: string): ApiKeyConfig[] {
   // Check for comma-separated keys
   const keysList = parseEnvValue(content, 'ANTHROPIC_API_KEYS');
   if (keysList) {
-    const keys = keysList.split(',').map(k => k.trim()).filter(Boolean);
+    const keys = keysList
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
     keys.forEach((key, i) => {
       configs.push({ name: `key-${i + 1}`, apiKey: key, baseUrl });
     });
@@ -355,8 +363,8 @@ export function getKeyStatus(): {
   return {
     currentKey: keyStates[currentIndex]?.config.name || 'none',
     totalKeys: keyStates.length,
-    availableKeys: keyStates.filter(s => s.isAvailable).length,
-    keys: keyStates.map(s => ({
+    availableKeys: keyStates.filter((s) => s.isAvailable).length,
+    keys: keyStates.map((s) => ({
       name: s.config.name,
       available: s.isAvailable,
       errors: s.errorCount,
@@ -378,6 +386,8 @@ export function getSecretsForContainer(): Record<string, string> {
   if (current.authToken) {
     // Some providers use ANTHROPIC_AUTH_TOKEN instead of API key
     secrets.ANTHROPIC_AUTH_TOKEN = current.authToken;
+    // Also set as API key for SDK compatibility (some SDKs only check API_KEY)
+    secrets.ANTHROPIC_API_KEY = current.authToken;
   }
   if (current.apiKey) {
     secrets.ANTHROPIC_API_KEY = current.apiKey;

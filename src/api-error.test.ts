@@ -4,7 +4,9 @@ import { detectApiError, formatTaskApiErrorMessage } from './api-error.js';
 describe('api-error', () => {
   describe('detectApiError', () => {
     it('detects quota exceeded errors', () => {
-      const result = detectApiError('usage limit exceeded for this billing cycle');
+      const result = detectApiError(
+        'usage limit exceeded for this billing cycle',
+      );
       expect(result.isApiError).toBe(true);
       expect(result.errorType).toBe('quota');
       expect(result.userMessage).toContain('配额已用尽');
@@ -17,7 +19,9 @@ describe('api-error', () => {
     });
 
     it('detects rate limit errors', () => {
-      const result = detectApiError('rate limit exceeded, please retry after 60s');
+      const result = detectApiError(
+        'rate limit exceeded, please retry after 60s',
+      );
       expect(result.isApiError).toBe(true);
       expect(result.errorType).toBe('rate_limit');
       expect(result.userMessage).toContain('请求频率超限');
@@ -73,7 +77,9 @@ describe('api-error', () => {
     });
 
     it('handles unknown API error types', () => {
-      const result = detectApiError('some unknown API error pattern not matched');
+      const result = detectApiError(
+        'some unknown API error pattern not matched',
+      );
       expect(result.isApiError).toBe(false);
     });
 
@@ -99,7 +105,10 @@ describe('api-error', () => {
 
     it('truncates long task prompts', () => {
       const longPrompt = 'a'.repeat(200);
-      const message = formatTaskApiErrorMessage(longPrompt, 'rate limit exceeded');
+      const message = formatTaskApiErrorMessage(
+        longPrompt,
+        'rate limit exceeded',
+      );
 
       expect(message).toContain('aaa...');
       expect(message.length).toBeLessThan(600);

@@ -24,7 +24,9 @@ export interface ApiErrorResult {
 /**
  * Check if an error message indicates an API problem.
  */
-export function detectApiError(error: string | null | undefined): ApiErrorResult {
+export function detectApiError(
+  error: string | null | undefined,
+): ApiErrorResult {
   if (!error) {
     return { isApiError: false, errorType: 'unknown', userMessage: '' };
   }
@@ -53,7 +55,10 @@ export function detectApiError(error: string | null | undefined): ApiErrorResult
 /**
  * Format a user-friendly error message.
  */
-function formatUserMessage(error: string, errorType: ApiErrorResult['errorType']): string {
+function formatUserMessage(
+  error: string,
+  errorType: ApiErrorResult['errorType'],
+): string {
   const errorBrief = error.slice(0, 300);
 
   switch (errorType) {

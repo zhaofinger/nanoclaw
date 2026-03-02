@@ -69,7 +69,8 @@ describe('api-key-manager', () => {
 
       const secrets = getSecretsForContainer();
       expect(secrets.ANTHROPIC_AUTH_TOKEN).toBe('my-auth-token');
-      expect(secrets.ANTHROPIC_API_KEY).toBeUndefined();
+      // authToken is also set as API_KEY for SDK compatibility
+      expect(secrets.ANTHROPIC_API_KEY).toBe('my-auth-token');
     });
 
     it('supports both apiKey and authToken', () => {
@@ -204,7 +205,7 @@ ANTHROPIC_API_KEY_2=sk-key-2
       // So keys should still be available (reset)
       const status = getKeyStatus();
       // After exhausting all keys, the system resets them automatically
-      expect(status.keys.every(k => k.available)).toBe(true);
+      expect(status.keys.every((k) => k.available)).toBe(true);
     });
 
     it('resets error count on success', async () => {
@@ -239,7 +240,9 @@ ANTHROPIC_API_KEY_2=sk-key-2
       mockEnvContent = `ANTHROPIC_KEY_CONFIG='{"name":"only","apiKey":"sk-only"}'`;
       loadApiKeys();
 
-      const switched = await reportError('usage limit exceeded for this billing cycle');
+      const switched = await reportError(
+        'usage limit exceeded for this billing cycle',
+      );
       expect(switched).toBe(false);
 
       // Key should be reset after all keys exhausted
@@ -287,8 +290,8 @@ ANTHROPIC_API_KEY_2=sk-key-2
       resetKeys();
 
       const status = getKeyStatus();
-      expect(status.keys.every(k => k.available)).toBe(true);
-      expect(status.keys.every(k => k.errors === 0)).toBe(true);
+      expect(status.keys.every((k) => k.available)).toBe(true);
+      expect(status.keys.every((k) => k.errors === 0)).toBe(true);
     });
   });
 });

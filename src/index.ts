@@ -45,11 +45,7 @@ import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
 import { detectApiError } from './api-error.js';
-import {
-  getKeyStatus,
-  loadApiKeys,
-  onKeySwitch,
-} from './api-key-manager.js';
+import { getKeyStatus, loadApiKeys, onKeySwitch } from './api-key-manager.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
@@ -237,13 +233,19 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       let errorDetails = '';
       const groupDir = resolveGroupFolderPath(group.folder);
       const logsDir = path.join(groupDir, 'logs');
-      const logFiles = fs.readdirSync(logsDir)
-        .filter(f => f.startsWith('container-'))
+      const logFiles = fs
+        .readdirSync(logsDir)
+        .filter((f) => f.startsWith('container-'))
         .sort()
         .reverse();
       if (logFiles.length > 0) {
-        const latestLog = fs.readFileSync(path.join(logsDir, logFiles[0]), 'utf-8');
-        const stderrMatch = latestLog.match(/=== Stderr[^=]*===\n([\s\S]*?)(?:\n===|$)/);
+        const latestLog = fs.readFileSync(
+          path.join(logsDir, logFiles[0]),
+          'utf-8',
+        );
+        const stderrMatch = latestLog.match(
+          /=== Stderr[^=]*===\n([\s\S]*?)(?:\n===|$)/,
+        );
         if (stderrMatch) {
           errorDetails = stderrMatch[1].trim();
         }
@@ -500,19 +502,25 @@ async function main(): Promise<void> {
       (g) => g.folder === MAIN_GROUP_FOLDER,
     );
     if (mainGroup) {
-      const channel = findChannel(channels, Object.entries(registeredGroups).find(
-        ([, g]) => g.folder === MAIN_GROUP_FOLDER,
-      )?.[0] || '');
+      const channel = findChannel(
+        channels,
+        Object.entries(registeredGroups).find(
+          ([, g]) => g.folder === MAIN_GROUP_FOLDER,
+        )?.[0] || '',
+      );
       if (channel) {
-        const msg = `🔄 **API Key 已切换**\n\n` +
+        const msg =
+          `🔄 **API Key 已切换**\n\n` +
           `原因：${reason}\n` +
           `当前 Key：${newKey.name}`;
-        await channel.sendMessage(
-          Object.entries(registeredGroups).find(
-            ([, g]) => g.folder === MAIN_GROUP_FOLDER,
-          )?.[0] || '',
-          msg,
-        ).catch((err) => logger.warn({ err }, 'Failed to notify key switch'));
+        await channel
+          .sendMessage(
+            Object.entries(registeredGroups).find(
+              ([, g]) => g.folder === MAIN_GROUP_FOLDER,
+            )?.[0] || '',
+            msg,
+          )
+          .catch((err) => logger.warn({ err }, 'Failed to notify key switch'));
       }
     }
   });
