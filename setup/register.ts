@@ -30,7 +30,7 @@ function parseArgs(args: string[]): RegisterArgs {
     trigger: '',
     folder: '',
     requiresTrigger: true,
-    assistantName: 'Andy',
+    assistantName: 'Mario',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -51,7 +51,7 @@ function parseArgs(args: string[]): RegisterArgs {
         result.requiresTrigger = false;
         break;
       case '--assistant-name':
-        result.assistantName = args[++i] || 'Andy';
+        result.assistantName = args[++i] || 'Mario';
         break;
     }
   }
@@ -126,9 +126,9 @@ export async function run(args: string[]): Promise<void> {
 
   // Update assistant name in CLAUDE.md files if different from default
   let nameUpdated = false;
-  if (parsed.assistantName !== 'Andy') {
+  if (parsed.assistantName !== 'Mario') {
     logger.info(
-      { from: 'Andy', to: parsed.assistantName },
+      { from: 'Mario', to: parsed.assistantName },
       'Updating assistant name',
     );
 
@@ -140,9 +140,9 @@ export async function run(args: string[]): Promise<void> {
     for (const mdFile of mdFiles) {
       if (fs.existsSync(mdFile)) {
         let content = fs.readFileSync(mdFile, 'utf-8');
-        content = content.replace(/^# Andy$/m, `# ${parsed.assistantName}`);
+        content = content.replace(/^# Mario$/m, `# ${parsed.assistantName}`);
         content = content.replace(
-          /You are Andy/g,
+          /You are Mario/g,
           `You are ${parsed.assistantName}`,
         );
         fs.writeFileSync(mdFile, content);

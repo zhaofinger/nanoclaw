@@ -24,6 +24,8 @@ export class TelegramChannel implements Channel {
   private bot: Bot | null = null;
   private opts: TelegramChannelOpts;
   private botToken: string;
+  private draftIds: Map<string, number> = new Map();
+  private draftContent: Map<string, string> = new Map();
 
   constructor(botToken: string, opts: TelegramChannelOpts) {
     this.botToken = botToken;
@@ -81,9 +83,11 @@ export class TelegramChannel implements Channel {
           const { execSync } = await import('child_process');
           const output = execSync(
             'docker ps --filter name=nanoclaw --format "{{.Names}}" 2>/dev/null || echo ""',
-            { encoding: 'utf-8' }
+            { encoding: 'utf-8' },
           );
-          activeContainers = output.trim() ? output.trim().split('\n').length : 0;
+          activeContainers = output.trim()
+            ? output.trim().split('\n').length
+            : 0;
         } catch {
           activeContainers = 0;
         }
@@ -100,7 +104,8 @@ export class TelegramChannel implements Channel {
           `  • Available: ${keyStatus.availableKeys}`,
           `  • Current: ${keyStatus.currentKey}`,
           ...keyStatus.keys.map(
-            (k) => `  • ${k.name}: ${k.available ? '🟢' : '🔴'} (${k.errors} errors)`
+            (k) =>
+              `  • ${k.name}: ${k.available ? '🟢' : '🔴'} (${k.errors} errors)`,
           ),
         ].join('\n');
 
@@ -134,7 +139,7 @@ export class TelegramChannel implements Channel {
 
       // Translate Telegram @bot_username mentions into TRIGGER_PATTERN format.
       // Telegram @mentions (e.g., @andy_ai_bot) won't match TRIGGER_PATTERN
-      // (e.g., ^@Andy\b), so we prepend the trigger when the bot is @mentioned.
+      // (e.g., ^@Mario\b), so we prepend the trigger when the bot is @mentioned.
       const botUsername = ctx.me?.username?.toLowerCase();
       if (botUsername) {
         const entities = ctx.message.entities || [];
@@ -338,6 +343,10 @@ export class TelegramChannel implements Channel {
     try {
       const numericId = jid.replace(/^tg:/, '');
 
+      // Clear any active draft for this chat
+      this.draftIds.delete(jid);
+      this.draftContent.delete(jid);
+
       // Telegram has a 4096 character limit per message — split if needed
       const MAX_LENGTH = 4096;
       if (text.length <= MAX_LENGTH) {
@@ -353,6 +362,120 @@ export class TelegramChannel implements Channel {
       logger.info({ jid, length: text.length }, 'Telegram message sent');
     } catch (err) {
       logger.error({ jid, err }, 'Failed to send Telegram message');
+    }
+  }
+
+  /**
+   * Send a streaming message using sendMessageDraft API.
+   * Updates the same draft message as content arrives, then sends final message.
+   */
+  async sendStreamingMessage(
+    jid: string,
+    chunks: AsyncIterable<string>,
+  ): Promise<void> {
+    if (!this.bot) {
+      logger.warn('Telegram bot not initialized');
+      return;
+    }
+
+    const numericId = parseInt(jid.replace(/^tg:/, ''), 10);
+    if (isNaN(numericId)) {
+      logger.warn({ jid }, 'Invalid Telegram chat ID');
+      return;
+    }
+
+    // Generate a unique draft ID for this streaming session
+    const draftId = Date.now();
+    this.draftIds.set(jid, draftId);
+
+    let fullContent = '';
+    let lastSentContent = '';
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL_MS = 500; // Update at most every 500ms
+    const MAX_DRAFT_LENGTH = 4096;
+
+    try {
+      for await (const chunk of chunks) {
+        fullContent += chunk;
+
+        // Throttle updates to avoid rate limits
+        const now = Date.now();
+        if (now - lastUpdateTime < UPDATE_INTERVAL_MS) {
+          continue;
+        }
+
+        // Only send if content changed significantly (>10 chars or first update)
+        if (
+          lastSentContent.length === 0 ||
+          fullContent.length - lastSentContent.length > 10
+        ) {
+          const draftText = fullContent.slice(0, MAX_DRAFT_LENGTH);
+          await this.sendMessageDraft(numericId, draftId, draftText);
+          lastSentContent = draftText;
+          lastUpdateTime = now;
+          this.draftContent.set(jid, draftText);
+        }
+      }
+
+      // Send final message (clearing draft)
+      this.draftIds.delete(jid);
+      this.draftContent.delete(jid);
+
+      // Split final message if needed
+      const MAX_LENGTH = 4096;
+      if (fullContent.length <= MAX_LENGTH) {
+        await this.bot.api.sendMessage(numericId, fullContent);
+      } else {
+        for (let i = 0; i < fullContent.length; i += MAX_LENGTH) {
+          await this.bot.api.sendMessage(
+            numericId,
+            fullContent.slice(i, i + MAX_LENGTH),
+          );
+        }
+      }
+
+      logger.info(
+        { jid, length: fullContent.length },
+        'Telegram streaming message sent',
+      );
+    } catch (err) {
+      this.draftIds.delete(jid);
+      this.draftContent.delete(jid);
+      logger.error({ jid, err }, 'Failed to send Telegram streaming message');
+      throw err;
+    }
+  }
+
+  /**
+   * Send or update a message draft using raw Telegram Bot API.
+   * This is an experimental API for streaming message updates.
+   */
+  private async sendMessageDraft(
+    chatId: number,
+    draftId: number,
+    text: string,
+  ): Promise<void> {
+    try {
+      // Use raw API call since grammy might not have sendMessageDraft yet
+      const url = `https://api.telegram.org/bot${this.botToken}/sendMessageDraft`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          draft_id: draftId,
+          text: text,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        // Don't throw for draft errors - the API might not be available
+        logger.debug({ chatId, draftId, error }, 'sendMessageDraft API error');
+      }
+    } catch (err) {
+      // Silently fail - draft API is optional and might not be supported
+      logger.debug({ chatId, draftId, err }, 'sendMessageDraft failed');
     }
   }
 

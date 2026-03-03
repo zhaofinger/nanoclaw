@@ -358,10 +358,13 @@ export async function runContainerAgent(
           const endIdx = parseBuffer.indexOf(OUTPUT_END_MARKER, startIdx);
           if (endIdx === -1) break; // Incomplete pair, wait for more data
 
-          const jsonStr = parseBuffer
-            .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
-            .trim();
-          parseBuffer = parseBuffer.slice(endIdx + OUTPUT_END_MARKER.length);
+          // Extract JSON string between markers (exclude the markers themselves)
+          const jsonStart = startIdx + OUTPUT_START_MARKER.length;
+          const jsonStr = parseBuffer.slice(jsonStart, endIdx).trim();
+
+          // Update parseBuffer to remove processed content including the end marker
+          const afterEnd = endIdx + OUTPUT_END_MARKER.length;
+          parseBuffer = parseBuffer.slice(afterEnd);
 
           try {
             const parsed: ContainerOutput = JSON.parse(jsonStr);
@@ -373,6 +376,10 @@ export async function runContainerAgent(
             resetTimeout();
             // Call onOutput for all markers (including null results)
             // so idle timers start even for "silent" query completions.
+            logger.info(
+              { group: group.name, resultLength: parsed.result?.length || 0, jsonLength: jsonStr.length },
+              'Parsed container output'
+            );
             outputChain = outputChain.then(() => onOutput(parsed));
           } catch (err) {
             logger.warn(
