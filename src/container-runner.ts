@@ -415,8 +415,18 @@ export async function runContainerAgent(
 
     const killOnTimeout = () => {
       timedOut = true;
+      const timeoutDuration = Date.now() - startTime;
       logger.error(
-        { group: group.name, containerName },
+        {
+          group: group.name,
+          containerName,
+          timeoutMs: timeoutMs,
+          actualDuration: timeoutDuration,
+          hadStreamingOutput,
+          configTimeout,
+          idleTimeout: IDLE_TIMEOUT,
+          promptPreview: input.prompt.slice(0, 200),
+        },
         'Container timeout, stopping gracefully',
       );
       exec(stopContainer(containerName), { timeout: 15000 }, (err) => {
@@ -444,7 +454,7 @@ export async function runContainerAgent(
 
       if (timedOut) {
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
-        const timeoutLog = path.join(logsDir, `container-${ts}.log`);
+        const timeoutLog = path.join(logsDir, `container-timeout-${ts}.log`);
         fs.writeFileSync(
           timeoutLog,
           [
@@ -453,8 +463,20 @@ export async function runContainerAgent(
             `Group: ${group.name}`,
             `Container: ${containerName}`,
             `Duration: ${duration}ms`,
+            `Configured Timeout: ${configTimeout}ms`,
+            `Idle Timeout: ${IDLE_TIMEOUT}ms`,
+            `Effective Timeout: ${timeoutMs}ms`,
             `Exit Code: ${code}`,
             `Had Streaming Output: ${hadStreamingOutput}`,
+            ``,
+            `=== Input Prompt ===`,
+            input.prompt,
+            ``,
+            `=== Stdout (last 5000 chars) ===`,
+            stdout.slice(-5000),
+            ``,
+            `=== Stderr (last 5000 chars) ===`,
+            stderr.slice(-5000),
           ].join('\n'),
         );
 
