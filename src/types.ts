@@ -90,7 +90,10 @@ export interface Channel {
   // Optional: reaction/message reaction. Channels that support it implement it.
   sendReaction?(jid: string, messageId: string, emoji: string): Promise<void>;
   // Optional: streaming message using draft API. Channels that support it implement it.
-  sendStreamingMessage?(jid: string, chunks: AsyncIterable<string>): Promise<void>;
+  sendStreamingMessage?(
+    jid: string,
+    chunks: AsyncIterable<string>,
+  ): Promise<void>;
 }
 
 // Callback type that channels use to deliver inbound messages

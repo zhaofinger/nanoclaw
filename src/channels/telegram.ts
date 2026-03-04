@@ -117,7 +117,10 @@ export class TelegramChannel implements Channel {
             // Estimate tokens: roughly 1 token per char for mixed Chinese/English
             const estimatedTokens = Math.round(stats.totalChars * 0.5);
             const contextLimit = 200000; // Claude context limit
-            const usagePercent = Math.min(100, Math.round((estimatedTokens / contextLimit) * 100));
+            const usagePercent = Math.min(
+              100,
+              Math.round((estimatedTokens / contextLimit) * 100),
+            );
             contextInfo = `\n💬 *Context Usage*:\n  • Total Messages: ${stats.totalMessages}\n  • User: ${stats.userMessages} / Assistant: ${stats.assistantMessages}\n  • Total Chars: ${stats.totalChars.toLocaleString()}\n  • Est. Tokens: ~${estimatedTokens.toLocaleString()} (${usagePercent}%)\n  • First: ${firstDate}\n  • Last: ${lastDate}`;
           } else {
             contextInfo = '\n💬 *Context Usage*: No messages yet';
@@ -190,7 +193,10 @@ export class TelegramChannel implements Channel {
           fs.writeFileSync(compactSentinel, '');
 
           ctx.reply('🔄 已发送 compact 信号，会话上下文将被压缩...');
-          logger.info({ chatJid, group: group.folder }, 'Compact signal sent to active container');
+          logger.info(
+            { chatJid, group: group.folder },
+            'Compact signal sent to active container',
+          );
         } else {
           // No active container - clear the session to achieve similar effect
           const currentSession = getSession(group.folder);
@@ -198,7 +204,10 @@ export class TelegramChannel implements Channel {
             // Clear session by setting it to a new empty value
             setSession(group.folder, `compacted-${Date.now()}`);
             ctx.reply('✅ 会话已重置（无活跃容器）。下次触发时将创建新会话。');
-            logger.info({ chatJid, group: group.folder, oldSession: currentSession }, 'Session compacted (no active container)');
+            logger.info(
+              { chatJid, group: group.folder, oldSession: currentSession },
+              'Session compacted (no active container)',
+            );
           } else {
             ctx.reply('📭 当前没有活跃会话，无需 compact');
           }

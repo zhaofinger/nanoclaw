@@ -377,8 +377,12 @@ export async function runContainerAgent(
             // Call onOutput for all markers (including null results)
             // so idle timers start even for "silent" query completions.
             logger.info(
-              { group: group.name, resultLength: parsed.result?.length || 0, jsonLength: jsonStr.length },
-              'Parsed container output'
+              {
+                group: group.name,
+                resultLength: parsed.result?.length || 0,
+                jsonLength: jsonStr.length,
+              },
+              'Parsed container output',
             );
             outputChain = outputChain.then(() => onOutput(parsed));
           } catch (err) {
