@@ -196,6 +196,33 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
+  // Create a streaming handler that buffers chunks for sendStreamingMessage
+  const streamBuffer: string[] = [];
+  let streamResolver: (() => void) | null = null;
+  let streamDone = false;
+
+  async function* messageGenerator(): AsyncGenerator<string> {
+    let index = 0;
+    while (true) {
+      // Yield any buffered chunks
+      while (index < streamBuffer.length) {
+        yield streamBuffer[index++];
+      }
+      // Check if stream is done
+      if (streamDone) break;
+      // Wait for more data
+      await new Promise<void>((resolve) => {
+        streamResolver = resolve;
+      });
+      streamResolver = null;
+    }
+  }
+
+  // Start the streaming message send (non-blocking)
+  const streamingPromise = channel.sendStreamingMessage
+    ? channel.sendStreamingMessage(chatJid, messageGenerator())
+    : Promise.resolve();
+
   const output = await runAgent(group, prompt, chatJid, async (result) => {
     // Streaming output callback — called for each agent result
     if (result.result) {
@@ -207,8 +234,17 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
       if (text) {
-        await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
+        if (channel.sendStreamingMessage) {
+          // Add to stream buffer for sendStreamingMessage
+          streamBuffer.push(text);
+          outputSentToUser = true;
+          // Notify generator that new data is available
+          if (streamResolver) streamResolver();
+        } else {
+          // Fallback to sendMessage if streaming is not supported
+          await channel.sendMessage(chatJid, text);
+          outputSentToUser = true;
+        }
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
@@ -222,6 +258,20 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       hadError = true;
     }
   });
+
+  // Signal that streaming is done
+  streamDone = true;
+  const _resolver = streamResolver;
+  if (_resolver) {
+    (_resolver as () => void)();
+  }
+
+  // Wait for streaming message to complete
+  try {
+    await streamingPromise;
+  } catch (err) {
+    logger.warn({ err, chatJid }, 'Streaming message failed');
+  }
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);

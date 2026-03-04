@@ -57,6 +57,7 @@ interface SDKUserMessage {
 
 const IPC_INPUT_DIR = '/workspace/ipc/input';
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
+const IPC_INPUT_COMPACT_SENTINEL = path.join(IPC_INPUT_DIR, '_compact');
 const IPC_POLL_MS = 500;
 
 /**
@@ -295,6 +296,17 @@ function shouldClose(): boolean {
 }
 
 /**
+ * Check for _compact sentinel.
+ */
+function shouldCompact(): boolean {
+  if (fs.existsSync(IPC_INPUT_COMPACT_SENTINEL)) {
+    try { fs.unlinkSync(IPC_INPUT_COMPACT_SENTINEL); } catch { /* ignore */ }
+    return true;
+  }
+  return false;
+}
+
+/**
  * Drain all pending IPC input messages.
  * Returns messages found, or empty array.
  */
@@ -327,14 +339,18 @@ function drainIpcInput(): string[] {
 }
 
 /**
- * Wait for a new IPC message or _close sentinel.
- * Returns the messages as a single string, or null if _close.
+ * Wait for a new IPC message, _close, or _compact sentinel.
+ * Returns the messages as a single string, null if _close, or '__COMPACT__' if _compact.
  */
-function waitForIpcMessage(): Promise<string | null> {
+function waitForIpcMessageWithCompact(): Promise<string | null> {
   return new Promise((resolve) => {
     const poll = () => {
       if (shouldClose()) {
         resolve(null);
+        return;
+      }
+      if (shouldCompact()) {
+        resolve('__COMPACT__');
         return;
       }
       const messages = drainIpcInput();
@@ -361,13 +377,14 @@ async function runQuery(
   containerInput: ContainerInput,
   sdkEnv: Record<string, string | undefined>,
   resumeAt?: string,
-): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean }> {
+): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; compactRequested: boolean }> {
   const stream = new MessageStream();
   stream.push(prompt);
 
-  // Poll IPC for follow-up messages and _close sentinel during the query
+  // Poll IPC for follow-up messages, _close, and _compact sentinels during the query
   let ipcPolling = true;
   let closedDuringQuery = false;
+  let compactRequested = false;
   const pollIpcDuringQuery = () => {
     if (!ipcPolling) return;
     if (shouldClose()) {
@@ -376,6 +393,11 @@ async function runQuery(
       stream.end();
       ipcPolling = false;
       return;
+    }
+    if (shouldCompact()) {
+      log('Compact sentinel detected during query, will compact after current turn');
+      compactRequested = true;
+      // Don't end stream immediately, let the current query complete
     }
     const messages = drainIpcInput();
     for (const text of messages) {
@@ -486,8 +508,8 @@ async function runQuery(
   }
 
   ipcPolling = false;
-  log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`);
-  return { newSessionId, lastAssistantUuid, closedDuringQuery };
+  log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}, compactRequested: ${compactRequested}`);
+  return { newSessionId, lastAssistantUuid, closedDuringQuery, compactRequested };
 }
 
 async function main(): Promise<void> {
@@ -537,8 +559,17 @@ async function main(): Promise<void> {
 
   // Query loop: run query → wait for IPC message → run new query → repeat
   let resumeAt: string | undefined;
+  let compactRequested = false;
   try {
     while (true) {
+      // If compact was requested, start a fresh session to trigger compaction
+      if (compactRequested) {
+        log('Compact requested, starting fresh session to trigger compaction');
+        sessionId = undefined;
+        resumeAt = undefined;
+        compactRequested = false;
+      }
+
       log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
 
       const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
@@ -557,16 +588,30 @@ async function main(): Promise<void> {
         break;
       }
 
+      // If compact was requested during the query, handle it now
+      if (queryResult.compactRequested) {
+        log('Compact requested during query, starting fresh session');
+        writeOutput({ status: 'success', result: '✅ 会话已压缩 (Context compacted)', newSessionId: sessionId });
+        compactRequested = true;
+        continue;
+      }
+
       // Emit session update so host can track it
       writeOutput({ status: 'success', result: null, newSessionId: sessionId });
 
       log('Query ended, waiting for next IPC message...');
 
-      // Wait for the next message or _close sentinel
-      const nextMessage = await waitForIpcMessage();
+      // Wait for the next message or _close/_compact sentinel
+      const nextMessage = await waitForIpcMessageWithCompact();
       if (nextMessage === null) {
         log('Close sentinel received, exiting');
         break;
+      }
+      if (nextMessage === '__COMPACT__') {
+        log('Compact sentinel received, starting fresh session');
+        compactRequested = true;
+        prompt = '继续'; // Continue with a simple prompt after compact
+        continue;
       }
 
       log(`Got new message (${nextMessage.length} chars), starting new query`);

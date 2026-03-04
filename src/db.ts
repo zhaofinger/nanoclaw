@@ -340,6 +340,67 @@ export function getMessagesSince(
     .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
 }
 
+export interface ChatStats {
+  totalMessages: number;
+  userMessages: number;
+  assistantMessages: number;
+  totalChars: number;
+  firstMessageTime: string | null;
+  lastMessageTime: string | null;
+}
+
+/**
+ * Get statistics for a specific chat (for context usage display).
+ */
+export function getChatStats(chatJid: string, botPrefix: string): ChatStats {
+  const stats = db
+    .prepare(
+      `
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN is_from_me = 0 THEN 1 ELSE 0 END) as user_count,
+      SUM(CASE WHEN is_from_me = 1 THEN 1 ELSE 0 END) as assistant_count,
+      SUM(LENGTH(content)) as total_chars,
+      MIN(timestamp) as first_time,
+      MAX(timestamp) as last_time
+    FROM messages
+    WHERE chat_jid = ?
+      AND is_bot_message = 0
+      AND content NOT LIKE ?
+  `,
+    )
+    .get(chatJid, `${botPrefix}:%`) as
+    | {
+        total: number;
+        user_count: number;
+        assistant_count: number;
+        total_chars: number;
+        first_time: string;
+        last_time: string;
+      }
+    | undefined;
+
+  if (!stats) {
+    return {
+      totalMessages: 0,
+      userMessages: 0,
+      assistantMessages: 0,
+      totalChars: 0,
+      firstMessageTime: null,
+      lastMessageTime: null,
+    };
+  }
+
+  return {
+    totalMessages: stats.total,
+    userMessages: stats.user_count,
+    assistantMessages: stats.assistant_count,
+    totalChars: stats.total_chars || 0,
+    firstMessageTime: stats.first_time || null,
+    lastMessageTime: stats.last_time || null,
+  };
+}
+
 export function createTask(
   task: Omit<ScheduledTask, 'last_run' | 'last_result'>,
 ): void {

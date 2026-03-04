@@ -4,6 +4,8 @@ import path from 'path';
 
 import { ASSISTANT_NAME, GROUPS_DIR, TRIGGER_PATTERN } from '../config.js';
 import { getKeyStatus } from '../api-key-manager.js';
+import { getChatStats, getSession, setSession } from '../db.js';
+import { resolveGroupIpcPath } from '../group-folder.js';
 import { logger } from '../logger.js';
 import {
   Channel,
@@ -38,6 +40,7 @@ export class TelegramChannel implements Channel {
     // Set bot command menu
     await this.bot.api.setMyCommands([
       { command: 'status', description: '查看 bot 状态和 API key 信息' },
+      { command: 'compact', description: '手动压缩当前会话上下文' },
       { command: 'chatid', description: '获取当前聊天的注册 ID' },
       { command: 'ping', description: '检查 bot 是否在线' },
     ]);
@@ -66,6 +69,7 @@ export class TelegramChannel implements Channel {
     this.bot.command('status', async (ctx) => {
       try {
         const keyStatus = getKeyStatus();
+        const chatJid = `tg:${ctx.chat.id}`;
 
         // Check container runtime
         let containerStatus = 'Unknown';
@@ -92,12 +96,45 @@ export class TelegramChannel implements Channel {
           activeContainers = 0;
         }
 
+        // Get session and context info for current chat
+        const group = this.opts.registeredGroups()[chatJid];
+        let sessionInfo = '';
+        let contextInfo = '';
+
+        if (group) {
+          const sessionId = getSession(group.folder);
+          const stats = getChatStats(chatJid, ASSISTANT_NAME);
+
+          sessionInfo = `\n📝 *Session*:\n  • ID: ${sessionId ? `${sessionId.slice(0, 16)}...` : '未创建'}\n  • Group: ${group.folder}`;
+
+          if (stats.totalMessages > 0) {
+            const firstDate = stats.firstMessageTime
+              ? new Date(stats.firstMessageTime).toLocaleDateString('zh-CN')
+              : '-';
+            const lastDate = stats.lastMessageTime
+              ? new Date(stats.lastMessageTime).toLocaleDateString('zh-CN')
+              : '-';
+            // Estimate tokens: roughly 1 token per char for mixed Chinese/English
+            const estimatedTokens = Math.round(stats.totalChars * 0.5);
+            const contextLimit = 200000; // Claude context limit
+            const usagePercent = Math.min(100, Math.round((estimatedTokens / contextLimit) * 100));
+            contextInfo = `\n💬 *Context Usage*:\n  • Total Messages: ${stats.totalMessages}\n  • User: ${stats.userMessages} / Assistant: ${stats.assistantMessages}\n  • Total Chars: ${stats.totalChars.toLocaleString()}\n  • Est. Tokens: ~${estimatedTokens.toLocaleString()} (${usagePercent}%)\n  • First: ${firstDate}\n  • Last: ${lastDate}`;
+          } else {
+            contextInfo = '\n💬 *Context Usage*: No messages yet';
+          }
+        } else {
+          sessionInfo = '\n⚠️ This chat is not registered';
+        }
+
         const statusText = [
           `*${ASSISTANT_NAME} Status*`,
           '',
           `🤖 *Bot*: Online`,
           `🐳 *Container Runtime*: ${containerStatus}`,
           `📦 *Active Containers*: ${activeContainers}`,
+          `💬 *Chat*: ${chatJid}`,
+          sessionInfo,
+          contextInfo,
           '',
           `🔑 *API Keys*:`,
           `  • Total: ${keyStatus.totalKeys}`,
@@ -113,6 +150,62 @@ export class TelegramChannel implements Channel {
       } catch (err) {
         logger.error({ err }, 'Failed to get status');
         ctx.reply('Failed to retrieve status. Please try again later.');
+      }
+    });
+
+    // Command to compact the current session context
+    this.bot.command('compact', async (ctx) => {
+      try {
+        const chatJid = `tg:${ctx.chat.id}`;
+        const group = this.opts.registeredGroups()[chatJid];
+
+        if (!group) {
+          ctx.reply('⚠️ 当前聊天未注册，无法执行 compact');
+          return;
+        }
+
+        // Check if there's an active container for this group
+        const { execSync } = await import('child_process');
+        const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
+        const containerPattern = `nanoclaw-${safeName}`;
+
+        let hasActiveContainer = false;
+        try {
+          const output = execSync(
+            `docker ps --filter name=${containerPattern} --format "{{.Names}}" 2>/dev/null || echo ""`,
+            { encoding: 'utf-8' },
+          );
+          hasActiveContainer = output.trim().length > 0;
+        } catch {
+          hasActiveContainer = false;
+        }
+
+        if (hasActiveContainer) {
+          // Send compact signal via IPC to active container
+          const ipcDir = resolveGroupIpcPath(group.folder);
+          const inputDir = path.join(ipcDir, 'input');
+          fs.mkdirSync(inputDir, { recursive: true });
+
+          const compactSentinel = path.join(inputDir, '_compact');
+          fs.writeFileSync(compactSentinel, '');
+
+          ctx.reply('🔄 已发送 compact 信号，会话上下文将被压缩...');
+          logger.info({ chatJid, group: group.folder }, 'Compact signal sent to active container');
+        } else {
+          // No active container - clear the session to achieve similar effect
+          const currentSession = getSession(group.folder);
+          if (currentSession) {
+            // Clear session by setting it to a new empty value
+            setSession(group.folder, `compacted-${Date.now()}`);
+            ctx.reply('✅ 会话已重置（无活跃容器）。下次触发时将创建新会话。');
+            logger.info({ chatJid, group: group.folder, oldSession: currentSession }, 'Session compacted (no active container)');
+          } else {
+            ctx.reply('📭 当前没有活跃会话，无需 compact');
+          }
+        }
+      } catch (err) {
+        logger.error({ err }, 'Failed to compact session');
+        ctx.reply('❌ compact 操作失败，请稍后重试');
       }
     });
 
@@ -367,7 +460,8 @@ export class TelegramChannel implements Channel {
 
   /**
    * Send a streaming message using sendMessageDraft API.
-   * Updates the same draft message as content arrives, then sends final message.
+   * Uses animated draft updates for smoother streaming experience.
+   * Requires bot to have forum topic mode enabled.
    */
   async sendStreamingMessage(
     jid: string,
@@ -384,15 +478,13 @@ export class TelegramChannel implements Channel {
       return;
     }
 
-    // Generate a unique draft ID for this streaming session
-    const draftId = Date.now();
-    this.draftIds.set(jid, draftId);
-
     let fullContent = '';
     let lastSentContent = '';
     let lastUpdateTime = 0;
-    const UPDATE_INTERVAL_MS = 500; // Update at most every 500ms
-    const MAX_DRAFT_LENGTH = 4096;
+    let draftId: number | undefined;
+    let draftSent = false;
+    const UPDATE_INTERVAL_MS = 300; // Update at most every 300ms for smoother animation
+    const MAX_MESSAGE_LENGTH = 4096;
 
     try {
       for await (const chunk of chunks) {
@@ -404,33 +496,61 @@ export class TelegramChannel implements Channel {
           continue;
         }
 
-        // Only send if content changed significantly (>10 chars or first update)
+        // Only send if content changed significantly (>5 chars or first update)
         if (
           lastSentContent.length === 0 ||
-          fullContent.length - lastSentContent.length > 10
+          fullContent.length - lastSentContent.length > 5
         ) {
-          const draftText = fullContent.slice(0, MAX_DRAFT_LENGTH);
-          await this.sendMessageDraft(numericId, draftId, draftText);
-          lastSentContent = draftText;
+          const displayText = fullContent.slice(0, MAX_MESSAGE_LENGTH);
+
+          // Generate a unique draft_id for this streaming session
+          if (!draftId) {
+            draftId = Math.floor(Date.now() / 1000); // Use timestamp as draft_id
+            this.draftIds.set(jid, draftId);
+          }
+
+          // Use sendMessageDraft for animated updates
+          await this.bot.api.sendMessageDraft(
+            numericId,
+            draftId,
+            displayText + ' ⏳',
+          );
+          draftSent = true;
+
+          lastSentContent = displayText;
           lastUpdateTime = now;
-          this.draftContent.set(jid, draftText);
+          this.draftContent.set(jid, displayText);
         }
       }
 
-      // Send final message (clearing draft)
+      // Send final message
       this.draftIds.delete(jid);
       this.draftContent.delete(jid);
 
-      // Split final message if needed
-      const MAX_LENGTH = 4096;
-      if (fullContent.length <= MAX_LENGTH) {
-        await this.bot.api.sendMessage(numericId, fullContent);
+      if (draftSent && draftId) {
+        // Send final content as a new message (drafts can't be converted to regular messages)
+        if (fullContent.length <= MAX_MESSAGE_LENGTH) {
+          await this.bot.api.sendMessage(numericId, fullContent);
+        } else {
+          // Split long messages
+          for (let i = 0; i < fullContent.length; i += MAX_MESSAGE_LENGTH) {
+            await this.bot.api.sendMessage(
+              numericId,
+              fullContent.slice(i, i + MAX_MESSAGE_LENGTH),
+            );
+          }
+        }
       } else {
-        for (let i = 0; i < fullContent.length; i += MAX_LENGTH) {
-          await this.bot.api.sendMessage(
-            numericId,
-            fullContent.slice(i, i + MAX_LENGTH),
-          );
+        // No draft was sent, just send the full message
+        if (fullContent.length <= MAX_MESSAGE_LENGTH) {
+          await this.bot.api.sendMessage(numericId, fullContent);
+        } else {
+          for (let i = 0; i < fullContent.length; i += MAX_MESSAGE_LENGTH) {
+            await this.bot.api.sendMessage(
+              numericId,
+              fullContent.slice(i, i + MAX_MESSAGE_LENGTH),
+            );
+          }
         }
       }
 
@@ -443,39 +563,6 @@ export class TelegramChannel implements Channel {
       this.draftContent.delete(jid);
       logger.error({ jid, err }, 'Failed to send Telegram streaming message');
       throw err;
-    }
-  }
-
-  /**
-   * Send or update a message draft using raw Telegram Bot API.
-   * This is an experimental API for streaming message updates.
-   */
-  private async sendMessageDraft(
-    chatId: number,
-    draftId: number,
-    text: string,
-  ): Promise<void> {
-    try {
-      // Use raw API call since grammy might not have sendMessageDraft yet
-      const url = `https://api.telegram.org/bot${this.botToken}/sendMessageDraft`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          draft_id: draftId,
-          text: text,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        // Don't throw for draft errors - the API might not be available
-        logger.debug({ chatId, draftId, error }, 'sendMessageDraft API error');
-      }
-    } catch (err) {
-      // Silently fail - draft API is optional and might not be supported
-      logger.debug({ chatId, draftId, err }, 'sendMessageDraft failed');
     }
   }
 
