@@ -26,8 +26,6 @@ export class TelegramChannel implements Channel {
   private bot: Bot | null = null;
   private opts: TelegramChannelOpts;
   private botToken: string;
-  private draftIds: Map<string, number> = new Map();
-  private draftContent: Map<string, string> = new Map();
 
   constructor(botToken: string, opts: TelegramChannelOpts) {
     this.botToken = botToken;
@@ -445,10 +443,6 @@ export class TelegramChannel implements Channel {
     try {
       const numericId = jid.replace(/^tg:/, '');
 
-      // Clear any active draft for this chat
-      this.draftIds.delete(jid);
-      this.draftContent.delete(jid);
-
       // Telegram has a 4096 character limit per message — split if needed
       const MAX_LENGTH = 4096;
       if (text.length <= MAX_LENGTH) {
@@ -464,114 +458,6 @@ export class TelegramChannel implements Channel {
       logger.info({ jid, length: text.length }, 'Telegram message sent');
     } catch (err) {
       logger.error({ jid, err }, 'Failed to send Telegram message');
-    }
-  }
-
-  /**
-   * Send a streaming message using sendMessageDraft API.
-   * Uses animated draft updates for smoother streaming experience.
-   * Requires bot to have forum topic mode enabled.
-   */
-  async sendStreamingMessage(
-    jid: string,
-    chunks: AsyncIterable<string>,
-  ): Promise<void> {
-    if (!this.bot) {
-      logger.warn('Telegram bot not initialized');
-      return;
-    }
-
-    const numericId = parseInt(jid.replace(/^tg:/, ''), 10);
-    if (isNaN(numericId)) {
-      logger.warn({ jid }, 'Invalid Telegram chat ID');
-      return;
-    }
-
-    let fullContent = '';
-    let lastSentContent = '';
-    let lastUpdateTime = 0;
-    let draftId: number | undefined;
-    let draftSent = false;
-    const UPDATE_INTERVAL_MS = 300; // Update at most every 300ms for smoother animation
-    const MAX_MESSAGE_LENGTH = 4096;
-
-    try {
-      for await (const chunk of chunks) {
-        fullContent += chunk;
-
-        // Throttle updates to avoid rate limits
-        const now = Date.now();
-        if (now - lastUpdateTime < UPDATE_INTERVAL_MS) {
-          continue;
-        }
-
-        // Only send if content changed significantly (>5 chars or first update)
-        if (
-          lastSentContent.length === 0 ||
-          fullContent.length - lastSentContent.length > 5
-        ) {
-          const displayText = fullContent.slice(0, MAX_MESSAGE_LENGTH);
-
-          // Generate a unique draft_id for this streaming session
-          if (!draftId) {
-            draftId = Math.floor(Date.now() / 1000); // Use timestamp as draft_id
-            this.draftIds.set(jid, draftId);
-          }
-
-          // Use sendMessageDraft for animated updates
-          await this.bot.api.sendMessageDraft(
-            numericId,
-            draftId,
-            displayText + ' ⏳',
-          );
-          draftSent = true;
-
-          lastSentContent = displayText;
-          lastUpdateTime = now;
-          this.draftContent.set(jid, displayText);
-        }
-      }
-
-      // Send final message
-      this.draftIds.delete(jid);
-      this.draftContent.delete(jid);
-
-      if (draftSent && draftId) {
-        // Send final content as a new message (drafts can't be converted to regular messages)
-        if (fullContent.length <= MAX_MESSAGE_LENGTH) {
-          await this.bot.api.sendMessage(numericId, fullContent);
-        } else {
-          // Split long messages
-          for (let i = 0; i < fullContent.length; i += MAX_MESSAGE_LENGTH) {
-            await this.bot.api.sendMessage(
-              numericId,
-              fullContent.slice(i, i + MAX_MESSAGE_LENGTH),
-            );
-          }
-        }
-      } else {
-        // No draft was sent, just send the full message
-        if (fullContent.length <= MAX_MESSAGE_LENGTH) {
-          await this.bot.api.sendMessage(numericId, fullContent);
-        } else {
-          for (let i = 0; i < fullContent.length; i += MAX_MESSAGE_LENGTH) {
-            await this.bot.api.sendMessage(
-              numericId,
-              fullContent.slice(i, i + MAX_MESSAGE_LENGTH),
-            );
-          }
-        }
-      }
-
-      logger.info(
-        { jid, length: fullContent.length },
-        'Telegram streaming message sent',
-      );
-    } catch (err) {
-      this.draftIds.delete(jid);
-      this.draftContent.delete(jid);
-      logger.error({ jid, err }, 'Failed to send Telegram streaming message');
-      throw err;
     }
   }
 
